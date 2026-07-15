@@ -1,0 +1,69 @@
+# Local editor/agent state
+.agents/
+.codex/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Python bytecode/cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python virtual environments
+.venv/
+.venv*/
+venv/
+env/
+
+# Python packaging/build outputs
+dist/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+wheelhouse/
+
+# Test and analysis caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# pybind11 extension outputs
+*.so
+*.pyd
+*.dll
+*.dylib
+
+# CMake output directories used by this repository
+/itfs/build/
+/itfs/bin/
+/lite/build/
+/lite/bin/
+/itfs_pywrapper/build/
+/lite_pywrapper/build/
+
+# CMake generated files, in case users build in a source directory
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+Makefile
+Testing/
+
+# Native compiler/linker outputs
+*.o
+*.obj
+*.a
+*.lib
+*.exp
+*.ilk
+*.pdb
+*.exe
+*.log

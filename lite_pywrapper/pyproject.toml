@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=64", "wheel", "pybind11>=2.10"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ilidar-lite"
+version = "2.0.0"
+description = "Python bindings for the iTFS-LITE C++ SDK"
+requires-python = ">=3.8"
+dependencies = ["numpy>=1.20"]
+license = { text = "MIT" }
+
+[tool.setuptools]
+packages = ["ilidar_lite"]
