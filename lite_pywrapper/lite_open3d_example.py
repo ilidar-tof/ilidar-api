@@ -16,7 +16,7 @@ from ilidar_lite_wrapper import (
 )
 
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 HEIGHT_MIN_M = -1.5
 HEIGHT_MAX_M = 1.5

@@ -3,7 +3,7 @@
 The iLidar API provides C++ and Python receive examples for the **iTFS** and
 **iTFS-LITE** product families.
 
-Version: `V2.0.0`
+Version: `V2.0.1`
 
 ## Quick Start
 

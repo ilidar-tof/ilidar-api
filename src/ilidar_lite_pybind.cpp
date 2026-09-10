@@ -2,8 +2,8 @@
  * @file ilidar_lite_pybind.cpp
  * @brief Python bindings for the iTFS-LITE C++ SDK
  * @author Junwoo Son (json@hybo.co)
- * @date 2026-07-09
- * @version 2.0.0
+ * @date 2026-09-09
+ * @version 2.0.1
  */
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -124,6 +124,7 @@ struct LiteImgCpy {
     std::string ip;
     uint16_t port = 0;
     int capture_row = kRows;
+    uint8_t capture_mode = 0;
     uint16_t data_output = 0;
     std::shared_ptr<std::vector<float>> reconstruction_map;
 };
@@ -282,8 +283,8 @@ const ImagePlane *find_plane(const Frame &frame, int class_id) {
     return &it->second;
 }
 
-float depth_log8_to_m(uint8_t value) {
-    return static_cast<float>(iTFS::depth_log8_lut_lite::decode_mm(value)) * 0.001f;
+float depth_log8_to_m(uint8_t value, uint8_t capture_mode) {
+    return static_cast<float>(iTFS::decode_lite_depth_log8_mm(value, capture_mode)) * 0.001f;
 }
 
 float read_u16_as_m(const ImagePlane &plane, int idx, float scale) {
@@ -307,11 +308,12 @@ float read_s8_as_m(const ImagePlane &plane, int idx, float scale) {
 }
 
 py::object point_cloud_to_numpy(const Frame &frame) {
-    constexpr float depth_q16_max_m = 7.49481145f;
-    constexpr float depth_raw_q16_to_m = depth_q16_max_m / 65535.0f;
-    constexpr float depth_lin8_to_m = depth_q16_max_m / 255.0f;
-    constexpr float xyz_raw_q15_to_m = depth_q16_max_m / 32767.0f;
-    constexpr float xyz_lin8_to_m = depth_q16_max_m / 127.0f;
+    const bool f1 = (frame.mode & iTFS::lite_capture_mode_freq_mask) ==
+                    (iTFS::lite_capture_mode_freq_f1_single << iTFS::lite_capture_mode_freq_pos);
+    const float depth_raw_q16_to_m = (f1 ? iTFS::depth_f1_max_m : iTFS::depth_f2_max_m) / 65536.0f;
+    const float depth_lin8_to_m = (f1 ? iTFS::depth_f1_max_m : iTFS::depth_f2_max_m) / 256.0f;
+    const float xyz_raw_q15_to_m = (f1 ? iTFS::depth_f1_max_m : iTFS::depth_f2_max_m) / 32768.0f;
+    const float xyz_lin8_to_m = (f1 ? iTFS::depth_f1_max_m : iTFS::depth_f2_max_m) / 128.0f;
 
     uint16_t data_output = frame.info.data_output;
     uint16_t depth_mode = data_output & iTFS::packet::info_v3_data_output_depth_mask;
@@ -332,7 +334,7 @@ py::object point_cloud_to_numpy(const Frame &frame) {
                 } else if (depth_mode == iTFS::packet::info_v3_data_output_depth_lin_8bit) {
                     z_m = read_u8_as_m(*depth, idx, depth_lin8_to_m);
                 } else if (depth_mode == iTFS::packet::info_v3_data_output_depth_log_8bit) {
-                    z_m = depth_log8_to_m(depth->bytes[idx]);
+                    z_m = depth_log8_to_m(depth->bytes[idx], frame.mode);
                 } else {
                     continue;
                 }
@@ -494,16 +496,17 @@ py::object copied_image_to_numpy(LiteImgCpy &copy, int class_id, py::handle owne
     }
 
     int slot = copy.image.img_offset[class_id] / iTFS::lite_max_row;
+    const bool signed_axis = class_id == iTFS::lite_img_point_x || class_id == iTFS::lite_img_point_y;
     if (image_class_is_u8(copy.data_output, class_id)) {
         return py::array(
-            py::dtype::of<uint8_t>(),
+            signed_axis ? py::dtype::of<int8_t>() : py::dtype::of<uint8_t>(),
             {copy.capture_row, kCols},
             {static_cast<py::ssize_t>(kCols * sizeof(uint8_t)), static_cast<py::ssize_t>(sizeof(uint8_t))},
             &copy.image.data[slot].u8[0][0],
             owner);
     }
     return py::array(
-        py::dtype::of<uint16_t>(),
+        signed_axis ? py::dtype::of<int16_t>() : py::dtype::of<uint16_t>(),
         {copy.capture_row, kCols},
         {static_cast<py::ssize_t>(kCols * sizeof(uint16_t)), static_cast<py::ssize_t>(sizeof(uint16_t))},
         &copy.image.data[slot].u16[0][0],
@@ -537,18 +540,23 @@ py::object copied_display_to_numpy(const LiteImgCpy &copy, int class_id) {
 
     uint16_t mode = 0;
     if (class_id == iTFS::lite_img_depth) {
+        constexpr double depth_display_max_mm = 7494.0;
+        const double depth_max_mm = (((copy.capture_mode & iTFS::lite_capture_mode_freq_mask) >>
+                                     iTFS::lite_capture_mode_freq_pos) == iTFS::lite_capture_mode_freq_f1_single
+                                        ? iTFS::depth_f1_max_m
+                                        : iTFS::depth_f2_max_m) * 1000.0;
         mode = copy.data_output & iTFS::packet::info_v3_data_output_depth_mask;
         for (size_t i = 0; i < pixels; i++) {
             if (mode == iTFS::packet::info_v3_data_output_depth_log_8bit) {
                 dst[i] = display_u8(
-                    iTFS::depth_log8_lut_lite::decode_mm(src_u8[i]) * 255.0 / 7494.0);
+                    iTFS::decode_lite_depth_log8_mm(src_u8[i], copy.capture_mode) * 255.0 / depth_display_max_mm);
             } else if (mode == iTFS::packet::info_v3_data_output_depth_raw_q16 ||
                        mode == iTFS::packet::info_v3_data_output_xyz_raw_q15_q16) {
-                dst[i] = display_u8(src_u16[i] * 255.0 / 65535.0);
+                dst[i] = display_u8(src_u16[i] * depth_max_mm / 65536.0 * 255.0 / depth_display_max_mm);
             } else if (image_class_is_u8(copy.data_output, class_id)) {
-                dst[i] = src_u8[i];
+                dst[i] = display_u8(src_u8[i] * depth_max_mm / 256.0 * 255.0 / depth_display_max_mm);
             } else {
-                dst[i] = display_u8(src_u16[i] * 255.0 / 7494.0);
+                dst[i] = display_u8(src_u16[i] * 255.0 / depth_display_max_mm);
             }
         }
         return output;
@@ -593,11 +601,12 @@ const iTFS::lite_img_slot_t *copied_slot(const LiteImgCpy &copy, int class_id) {
 }
 
 py::object copied_point_cloud_to_numpy(const LiteImgCpy &copy) {
-    constexpr float depth_q16_max_m = 7.49481145f;
-    constexpr float depth_raw_q16_to_m = depth_q16_max_m / 65535.0f;
-    constexpr float depth_lin8_to_m = depth_q16_max_m / 255.0f;
-    constexpr float xyz_raw_q15_to_m = depth_q16_max_m / 32767.0f;
-    constexpr float xyz_lin8_to_m = depth_q16_max_m / 127.0f;
+    const bool f1 = (copy.capture_mode & iTFS::lite_capture_mode_freq_mask) ==
+                    (iTFS::lite_capture_mode_freq_f1_single << iTFS::lite_capture_mode_freq_pos);
+    const float depth_raw_q16_to_m = (f1 ? iTFS::depth_f1_max_m : iTFS::depth_f2_max_m) / 65536.0f;
+    const float depth_lin8_to_m = (f1 ? iTFS::depth_f1_max_m : iTFS::depth_f2_max_m) / 256.0f;
+    const float xyz_raw_q15_to_m = (f1 ? iTFS::depth_f1_max_m : iTFS::depth_f2_max_m) / 32768.0f;
+    const float xyz_lin8_to_m = (f1 ? iTFS::depth_f1_max_m : iTFS::depth_f2_max_m) / 128.0f;
 
     uint16_t depth_mode = copy.data_output & iTFS::packet::info_v3_data_output_depth_mask;
     const auto *depth = copied_slot(copy, iTFS::lite_img_depth);
@@ -625,7 +634,7 @@ py::object copied_point_cloud_to_numpy(const LiteImgCpy &copy) {
                 } else if (depth_mode == iTFS::packet::info_v3_data_output_depth_lin_8bit) {
                     z_m = depth_u8[idx] * depth_lin8_to_m;
                 } else if (depth_mode == iTFS::packet::info_v3_data_output_depth_log_8bit) {
-                    z_m = depth_log8_to_m(depth_u8[idx]);
+                    z_m = depth_log8_to_m(depth_u8[idx], copy.capture_mode);
                 } else {
                     continue;
                 }
@@ -718,6 +727,7 @@ class LiteDevice {
         copy.ip = ip_to_string(device()->ip);
         copy.port = device()->port;
         copy.capture_row = src->capture_row > 0 ? std::min(src->capture_row, kRows) : kRows;
+        copy.capture_mode = src->mode;
         copy.data_output = device()->info_v3.data_output;
         copy.reconstruction_map = reconstruction_map_;
     }

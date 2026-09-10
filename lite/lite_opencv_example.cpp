@@ -2,8 +2,8 @@
  * @file lite_opencv_example.cpp
  * @brief iTFS-LITE OpenCV example
  * @author Junwoo Son (json@hybo.co)
- * @date 2026-07-09
- * @version 2.0.0
+ * @date 2026-09-09
+ * @version 2.0.1
  */
 
 #include <chrono>
@@ -19,9 +19,10 @@
 
 // One reusable image copy per SDK device. The receive callback overwrites it.
 static iTFS::lite_img_cpy_t lite_img_data[iTFS::max_device];
+static uint16_t lite_data_output[iTFS::max_device];
 static constexpr double depth_display_max_mm = 7494.0;
 
-// The queue carries device indexes only; active image slots stay in lite_img_data.
+// The queue carries device indexes only; image slots stay in lite_img_data.
 static std::condition_variable lidar_cv;
 static std::mutex lidar_cv_mutex;
 static std::queue<int> lidar_q;
@@ -80,19 +81,26 @@ static std::queue<int> lidar_q;
 static void scale_depth_display_image(cv::Mat &dst,
                                       const cv::Mat &src,
                                       uint16_t depth_mode,
+                                      uint8_t capture_mode,
                                       uint8_t (*depth_image8)[iTFS::lite_max_col]) {
+
+    const double depth_max_mm = (((capture_mode & iTFS::lite_capture_mode_freq_mask) >>
+                                 iTFS::lite_capture_mode_freq_pos) == iTFS::lite_capture_mode_freq_f1_single
+                                    ? iTFS::depth_f1_max_m
+                                    : iTFS::depth_f2_max_m) * 1000.0;
+
     if (depth_mode == iTFS::packet::info_v3_data_output_depth_log_8bit) {
         for (int r = 0; r < iTFS::lite_max_row; r++) {
             for (int c = 0; c < iTFS::lite_max_col; c++) {
-                uint16_t depth_mm = iTFS::depth_log8_lut_lite::decode_mm(depth_image8[r][c]);
+                uint16_t depth_mm = iTFS::decode_lite_depth_log8_mm(depth_image8[r][c], capture_mode);
                 dst.at<uint8_t>(r, c) = cv::saturate_cast<uint8_t>(depth_mm * 255.0 / depth_display_max_mm);
             }
         }
     } else if (depth_mode == iTFS::packet::info_v3_data_output_depth_raw_q16 ||
                depth_mode == iTFS::packet::info_v3_data_output_xyz_raw_q15_q16) {
-        src.convertTo(dst, CV_8UC1, 255.0 / 65535.0);
+        src.convertTo(dst, CV_8UC1, depth_max_mm / 65536.0 * 255.0 / depth_display_max_mm);
     } else if (src.type() == CV_8UC1) {
-        dst = src;
+        src.convertTo(dst, CV_8UC1, depth_max_mm / 256.0 * 255.0 / depth_display_max_mm);
     } else {
         src.convertTo(dst, CV_8UC1, 255.0 / depth_display_max_mm);
     }
@@ -134,6 +142,7 @@ int main(int argc, char *argv[]) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     printf("[MESSAGE] iTFS::LITE is ready.\n");
+    printf("S/Q/Esc: exit.\n");
 
     // Main loop starts here
     int recv_device_idx = 0;
@@ -161,7 +170,7 @@ int main(int argc, char *argv[]) {
         // 2. Each image block below declares only the pointer type required by
         //    its selected mode. This keeps 8-bit and 16-bit union access separate.
         // 3. Fold the block for modes/classes you do not use in your application.
-        uint16_t data_output = lite->device[recv_device_idx].info_v3.data_output;
+        uint16_t data_output = lite_data_output[recv_device_idx];
         uint16_t depth_mode = data_output & iTFS::packet::info_v3_data_output_depth_mask;
         uint16_t amplitude_mode = (data_output & iTFS::packet::info_v3_data_output_amplitude_mask) >> iTFS::packet::info_v3_data_output_amplitude_pos;
         uint16_t intensity_mode = (data_output & iTFS::packet::info_v3_data_output_intensity_mask) >> iTFS::packet::info_v3_data_output_intensity_pos;
@@ -201,6 +210,7 @@ int main(int argc, char *argv[]) {
             scale_depth_display_image(cv_scaled_img,
                                       depth_img,
                                       depth_mode,
+                                      lite_img_data[recv_device_idx].mode,
                                       depth_image8);
             cv::applyColorMap(cv_scaled_img, cv_color_img, cv::COLORMAP_JET);
 
@@ -385,7 +395,7 @@ int main(int argc, char *argv[]) {
         key_input = cv::waitKey(10);
 
         // Check window property
-        if (key_input == 's' || key_input == 'S') {
+        if (key_input == 's' || key_input == 'S' || key_input == 'q' || key_input == 'Q' || key_input == 27) {
             break;
         }
         /**************************************/
@@ -499,6 +509,7 @@ static const char *capture_tof_name(uint8_t mode) {
 
 // Image callback: copy active SDK-owned slots, then wake the UI loop.
 static void lidar_data_handler(iTFS::lite_device_t *device) {
+    std::lock_guard<std::mutex> lk(lidar_cv_mutex);
     iTFS::lite_img_t *src = &device->data;
     iTFS::lite_img_cpy_t *dst = &lite_img_data[device->idx];
 
@@ -509,10 +520,10 @@ static void lidar_data_handler(iTFS::lite_device_t *device) {
     memcpy((void *)dst->data,
            (const void *)src->data,
            sizeof(iTFS::lite_img_slot_t) * dst->data_class_count);
+    lite_data_output[device->idx] = device->info_v3.data_output;
 
     // Notify the reception to the main thread
     int idx = device->idx;
-    std::lock_guard<std::mutex> lk(lidar_cv_mutex);
     lidar_q.push(idx);
     lidar_cv.notify_one();
 }

@@ -2,8 +2,8 @@
  * @file lite_pcl_example.cpp
  * @brief iTFS-LITE PCL example
  * @author Junwoo Son (json@hybo.co)
- * @date 2026-07-09
- * @version 2.0.0
+ * @date 2026-09-09
+ * @version 2.0.1
  */
 
 #include <chrono>
@@ -169,15 +169,6 @@ static float lite_x_float_data[iTFS::max_device][iTFS::lite_max_row][iTFS::lite_
 static float lite_y_float_data[iTFS::max_device][iTFS::lite_max_row][iTFS::lite_max_col];
 static float lite_z_float_data[iTFS::max_device][iTFS::lite_max_row][iTFS::lite_max_col];
 
-// Unit conversion used by raw output examples:
-//   Z Q16 raw 0..65535 maps to 0..7.49481145 m.
-//   X/Y Q15 raw uses the same full-scale distance with signed endpoints.
-static constexpr float depth_q16_max_m = 7.49481145f;
-static constexpr float depth_raw_q16_to_m = depth_q16_max_m / 65535.0f;
-static constexpr float depth_lin8_to_m = depth_q16_max_m / 255.0f;
-static constexpr float xyz_raw_q15_to_m = depth_q16_max_m / 32767.0f;
-static constexpr float xyz_lin8_to_m = depth_q16_max_m / 127.0f;
-
 // Return an enabled image slot, or NULL when that class is absent.
 static iTFS::lite_img_slot_t *get_img_slot(iTFS::lite_img_cpy_t *data, uint8_t img_class) {
     if (img_class >= iTFS::lite_img_class_count) {
@@ -312,6 +303,12 @@ int main(int argc, char *argv[]) {
         // 3. Fold the mode blocks you do not use in your application.
         uint16_t data_output = lite->device[recv_device_idx].info_v3.data_output;
         uint16_t depth_mode = data_output & iTFS::packet::info_v3_data_output_depth_mask;
+        const bool f1 = (lite_img_data[recv_device_idx].mode & iTFS::lite_capture_mode_freq_mask) ==
+                        (iTFS::lite_capture_mode_freq_f1_single << iTFS::lite_capture_mode_freq_pos);
+        const float depth_raw_q16_to_m = (f1 ? iTFS::depth_f1_max_m : iTFS::depth_f2_max_m) / 65536.0f;
+        const float depth_lin8_to_m = (f1 ? iTFS::depth_f1_max_m : iTFS::depth_f2_max_m) / 256.0f;
+        const float xyz_raw_q15_to_m = (f1 ? iTFS::depth_f1_max_m : iTFS::depth_f2_max_m) / 32768.0f;
+        const float xyz_lin8_to_m = (f1 ? iTFS::depth_f1_max_m : iTFS::depth_f2_max_m) / 128.0f;
 
         // Convert depth image to point cloud. Depth-only modes come first;
         // XYZ modes are handled after that as native point image outputs.
@@ -377,7 +374,8 @@ int main(int argc, char *argv[]) {
                 for (int r = 0; r < iTFS::lite_max_row; r++) {
                     for (int c = 0; c < iTFS::lite_max_col; c++) {
                         lite_depth_float_data[recv_device_idx][r][c] =
-                            static_cast<float>(iTFS::depth_log8_lut_lite::decode_mm(depth_image8[r][c])) * 0.001f;
+                            static_cast<float>(iTFS::decode_lite_depth_log8_mm(
+                                depth_image8[r][c], lite_img_data[recv_device_idx].mode)) * 0.001f;
                     }
                 }
 

@@ -1,6 +1,6 @@
 """Python bindings for the iTFS-LITE C++ SDK."""
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 from ._itfs_lite import (
     LiteDevice,

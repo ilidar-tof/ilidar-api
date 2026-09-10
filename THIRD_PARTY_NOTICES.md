@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-Version: `V2.0.0`
+Version: `V2.0.1`
 
 The iLidar SDK and example source code are licensed under the MIT License; see
 `LICENSE`. The optional example and binding dependencies below are maintained

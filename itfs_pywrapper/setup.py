@@ -8,7 +8,7 @@ from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 ROOT = Path(__file__).resolve().parent
 SDK_ROOT = ROOT.parent

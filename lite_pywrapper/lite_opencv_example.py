@@ -18,7 +18,7 @@ from ilidar_lite_wrapper import (
 )
 
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 def import_cv2_or_die():
     """Import system OpenCV while avoiding an incompatible user-site build."""

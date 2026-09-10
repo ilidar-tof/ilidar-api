@@ -2,8 +2,8 @@
  * @file packet_lite.hpp
  * @brief packet definitions for iTFS-LITE
  * @author Junwoo Son (json@hybo.co)
- * @date 2026-07-09
- * @version 2.0.0
+ * @date 2026-09-09
+ * @version 2.0.1
  */
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -36,7 +36,7 @@
 
 namespace iTFS {
 namespace packet {
-constexpr uint8_t ilidar_lite_pack_ver[3] = {2, 0, 0};
+constexpr uint8_t ilidar_lite_pack_ver[3] = {2, 0, 2};
 
 constexpr uint16_t img_data_v3_id = 0x0003; // LITE V1.2.0+
 constexpr uint16_t img_data_v3_len = 1284;  // LITE V1.2.0+
@@ -49,6 +49,19 @@ constexpr uint16_t intrnisic_len = 122;   // LITE V1.2.0+
 
 constexpr uint16_t info_v3_id = 0x0023; // LITE V1.2.0+
 constexpr uint16_t info_v3_len = 152;   // LITE V1.2.0+
+
+constexpr uint16_t advanced_trim_id = 0x0024; // LITE V1.2.6+
+constexpr uint16_t advanced_trim_len = 14;    // LITE V1.2.6+
+
+typedef struct {
+    uint16_t sensor_sn;
+    int16_t dcr0_f1;
+    int16_t dcr0_f2;
+    int16_t dcr1_f1_single;
+    int16_t dcr1_f2_single;
+    int16_t dcr1_f1_dual;
+    int16_t dcr1_f2_dual;
+} advanced_trim_t;
 
 typedef struct {
     uint8_t id;         // Image class id, see img_data_v3_class_*
@@ -89,13 +102,14 @@ typedef struct {              // [RW]
     uint8_t sensor_model_id;  // [R-] Sensor model identifier
     uint8_t sensor_boot_ctrl; // [R-] Boot control/status
 
-    uint8_t capture_mode;        // [RW] Firmware-specific capture mode
-    uint8_t capture_row;         // [R-] Capture row count
-    uint16_t capture_shutter[3]; // [RW] Capture shutter integration time in (us)
-    uint16_t capture_limit;      // [RW] Capture limit
+    uint8_t capture_mode;        // [RW] [7:6]: 0 dual, 1 F1 100 MHz, 2 F2 20 MHz; Edge Filter is independent of Post Cutoff.
+    uint8_t capture_row;         // [RW] Capture row count
+    uint16_t capture_shutter[3]; // [RW] Capture shutter (exposure) integration time in (us)
+    uint16_t capture_limit;      // [RW] [7:0] raw amplitude threshold, default 127; [15:8] reserved. Existing saved values retained.
     uint32_t capture_period_ns;  // [RW] Capture period in (ns)
 
-    uint16_t data_output;      // [RW] [3:0] depth/xyz, [5:4] amplitude, [7:6] intensity, [9:8] confidence
+    uint16_t data_output;      // [RW] [3:0] depth/xyz, [5:4] amplitude, [7:6] intensity, [9:8] confidence.
+                               // [10] Post Cutoff (default OFF): amplitude < capture_limit[7:0] zeros depth.
     uint8_t data_sensor_ip[4]; // [RW] Sensor IP
     uint8_t data_dest_ip[4];   // [RW] Destination IP
     uint8_t data_subnet[4];    // [RW] Subnet Mask

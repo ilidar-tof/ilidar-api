@@ -14,7 +14,7 @@ from ilidar_lite_wrapper import (
 )
 
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 
 def status_packet_handler(status):

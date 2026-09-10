@@ -2,8 +2,8 @@
  * @file ilidar_lite.cpp
  * @brief iTFS-LITE v3 receiver
  * @author Junwoo Son (json@hybo.co)
- * @date 2026-07-09
- * @version 2.0.0
+ * @date 2026-09-09
+ * @version 2.0.1
  */
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -654,6 +654,7 @@ int LITE::Set_reconstruction_map(int device_idx) {
     float fx = this->device[device_idx].intrinsic.lens_fx * 1e-5f;
     float fy = this->device[device_idx].intrinsic.lens_fy * 1e-5f;
 
+    // Vendor DivModel EEPROM order: OpenCV [k4, k5, p1, p2, k6, k1].
     float k1 = this->device[device_idx].intrinsic.lens_kc[0] * 1e-8f;
     float k2 = this->device[device_idx].intrinsic.lens_kc[1] * 1e-8f;
     float p1 = this->device[device_idx].intrinsic.lens_kc[2] * 1e-8f;
@@ -661,8 +662,8 @@ int LITE::Set_reconstruction_map(int device_idx) {
     float k3 = this->device[device_idx].intrinsic.lens_kc[4] * 1e-8f;
     float k4 = this->device[device_idx].intrinsic.lens_kc[5] * 1e-8f;
 
-    float map_cx = (iTFS::lite_max_col - 1) - cx;
-    float map_cy = (iTFS::lite_max_row - 1) - cy;
+    float map_cx = cx;
+    float map_cy = cy;
     float map_fx = fx;
     float map_fy = fy;
 
@@ -671,14 +672,19 @@ int LITE::Set_reconstruction_map(int device_idx) {
             float x = (_u - map_cx) / map_fx;
             float y = (_v - map_cy) / map_fy;
 
-            float r2 = x * x + y * y;
-            float r4 = r2 * r2;
-            float r6 = r4 * r2;
-
-            float radial = (1.0f + k1 * r2 + k2 * r4 + k3 * r6 + k4 * r6 * r2);
-
-            float x_dist = x * radial + 2 * p1 * x * y + p2 * (r2 + 2 * x * x);
-            float y_dist = y * radial + p1 * (r2 + 2 * y * y) + 2 * p2 * x * y;
+            float x_dist = x;
+            float y_dist = y;
+            // Invert the division model from observed pixel to the z=1 ray.
+            for (int iter = 0; iter < 8; iter++) {
+                float r2 = x_dist * x_dist + y_dist * y_dist;
+                float r4 = r2 * r2;
+                float r6 = r4 * r2;
+                float inv_radial = (1.0f + k1 * r2 + k2 * r4 + k3 * r6) / (1.0f + k4 * r2);
+                float tx = 2 * p1 * x_dist * y_dist + p2 * (r2 + 2 * x_dist * x_dist);
+                float ty = p1 * (r2 + 2 * y_dist * y_dist) + 2 * p2 * x_dist * y_dist;
+                x_dist = (x - tx) * inv_radial;
+                y_dist = (y - ty) * inv_radial;
+            }
 
             float rx = x_dist;
             float ry = y_dist;

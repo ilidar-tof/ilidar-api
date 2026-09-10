@@ -26,7 +26,7 @@ import time
 from pathlib import Path
 
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 INFO_STATUS_FALLBACK_COUNT = 10
 

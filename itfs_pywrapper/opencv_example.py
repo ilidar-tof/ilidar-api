@@ -18,7 +18,7 @@ from ilidar_wrapper import (
 )
 
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 ILIDAR_SYNC = True
 SYNC_PACKET_PERIOD_SECONDS = 10.0

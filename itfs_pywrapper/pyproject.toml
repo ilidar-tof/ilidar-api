@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ilidar"
-version = "2.0.0"
+version = "2.0.1"
 description = "Python bindings for the iTFS LiDAR C++ SDK"
 requires-python = ">=3.8"
 dependencies = ["numpy>=1.20"]

@@ -1,6 +1,6 @@
 """Python bindings for the iTFS LiDAR C++ SDK."""
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 from ._itfs import (
     Device,

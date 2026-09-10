@@ -2,8 +2,8 @@
  * @file packet.hpp
  * @brief Header-only library for iTFS packet definitions
  * @author Junwoo Son (json@hybo.co)
- * @date 2026-07-09
- * @version 2.0.0
+ * @date 2026-09-09
+ * @version 2.0.1
  */
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -35,12 +35,12 @@
 #include <stdio.h>
 
 namespace iTFX {
-constexpr uint8_t ilidar_pack_ver[3] = {2, 0, 0};
+constexpr uint8_t ilidar_pack_ver[3] = {2, 0, 1};
 }
 
 namespace iTFS {
 namespace packet {
-constexpr uint8_t ilidar_pack_ver[3] = {2, 0, 0};
+constexpr uint8_t ilidar_pack_ver[3] = {2, 0, 1};
 
 /*
 iTFS PACKET STRUCTURE DESCRIPTIONS

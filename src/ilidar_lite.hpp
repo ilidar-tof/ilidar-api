@@ -2,8 +2,8 @@
  * @file ilidar_lite.hpp
  * @brief iTFS-LITE v3 receiver header
  * @author Junwoo Son (json@hybo.co)
- * @date 2026-07-09
- * @version 2.0.0
+ * @date 2026-09-09
+ * @version 2.0.1
  */
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -33,12 +33,13 @@
 #pragma once
 
 #include "amp_int_log8_lut_lite.hpp"
+#include "depth_log8_f1_100m_lut_lite.hpp"
 #include "depth_log8_lut_lite.hpp"
 #include "ilidar.hpp"
 #include "packet_lite.hpp"
 
 namespace iTFS {
-constexpr uint8_t ilidar_lite_lib_ver[3] = {2, 0, 0};
+constexpr uint8_t ilidar_lite_lib_ver[3] = {2, 0, 2};
 
 static int lite_version(void) {
     printf("[MESSAGE] iTFS::LITE | ilidar_lite.cpp V%d.%d.%d\n",
@@ -89,6 +90,16 @@ constexpr uint8_t lite_capture_mode_freq_dual = 0;
 constexpr uint8_t lite_capture_mode_freq_f1_single = 1;
 constexpr uint8_t lite_capture_mode_freq_f2_single = 2;
 constexpr uint8_t lite_capture_mode_freq_reserved = 3;
+
+constexpr float depth_f1_max_m = 1.499f;
+constexpr float depth_f2_max_m = 7.495f; // F2/Dual fixed-point distance scale.
+
+static inline uint16_t decode_lite_depth_log8_mm(uint8_t code, uint8_t capture_mode) {
+    uint8_t freq = (capture_mode & lite_capture_mode_freq_mask) >> lite_capture_mode_freq_pos;
+    return freq == lite_capture_mode_freq_f1_single
+               ? iTFS_f1_100m::depth_log8_lut::decode_mm(code)
+               : depth_log8_lut_lite::decode_mm(code);
+}
 
 constexpr int lite_capture_mode_dust_filter_pos = 5;
 constexpr uint8_t lite_capture_mode_dust_filter_mask = 0x20;
